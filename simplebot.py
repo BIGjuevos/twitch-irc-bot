@@ -17,7 +17,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>
 
-import argparse
+import os
 import http.client
 import logging
 import re
@@ -36,21 +36,11 @@ fh.setFormatter(formatter)
 log.addHandler(fh)
 
 # --------------------------------------------- Start Settings ----------------------------------------------------
-parser = argparse.ArgumentParser()
-parser.add_argument("chan")
-parser.add_argument("nick")
-parser.add_argument("password")
-parser.add_argument("--host", default="irc.chat.twitch.tv")
-parser.add_argument("--port", default=6667)
-args = parser.parse_args()
-
-HOST = args.host  # Hostname of the IRC-Server, in this case twitch's
-PORT = args.port  # Ports
-CHAN = args.chan  # Channelname = #{Nickname}
-NICK = args.nick  # Nickname = Twitch username
-PASS = args.password  # www.twitchapps.com/tmi/ will help to retrieve the required authkey
-
-
+HOST = os.getenv('T_HOST',"irc.chat.twitch.tv")
+PORT = os.getenv('T_POST', 6667)
+CHAN = os.getenv('T_CHAN')
+NICK = os.getenv('T_NICK')
+PASS = os.getenv('T_PASS')
 # --------------------------------------------- End Settings -------------------------------------------------------
 
 
