@@ -16,7 +16,10 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>
+import datetime
 
+import dateutil.parser
+import json
 import os
 import http.client
 import http.server
@@ -45,6 +48,7 @@ PORT = os.getenv('T_POST', 6667)
 CHAN = os.getenv('T_CHAN')
 NICK = os.getenv('T_NICK')
 PASS = os.getenv('T_PASS')
+API_KEY = os.getenv('T_API_KEY')
 # --------------------------------------------- End Settings -------------------------------------------------------
 
 
@@ -114,9 +118,13 @@ def parse_message(msg):
     if len(msg) >= 1:
         msg = msg.split(' ')
         options = {'!ping': command_ping,
+                   "!uptime": command_uptime,
                    '!route': command_route}
         if msg[0] in options:
-            options[msg[0]]()
+            try:
+                options[msg[0]]()
+            except Exception:
+                log.exception("Something went wrong calling {msg[0]}")
 
 
 # --------------------------------------------- End Helper Functions -----------------------------------------------
@@ -125,6 +133,31 @@ def parse_message(msg):
 # --------------------------------------------- Start Command Functions --------------------------------------------
 def command_ping():
     send_message(CHAN, 'pong')
+
+
+def command_uptime():
+    conn = http.client.HTTPSConnection("api.twitch.tv")
+
+    url = "/kraken/streams/" + NICK + "?client_id=" \
+          + API_KEY
+    conn.request("GET", url)
+
+    res = conn.getresponse()
+    data = res.read()
+
+    info = json.loads(data)
+
+    if info['stream'] is None:
+        send_message(CHAN, 'Not currently streaming. Thanks for asking though.')
+        return
+
+    started = dateutil.parser.parse(info['stream']['created_at'])
+    now = datetime.datetime.now(datetime.timezone.utc)
+    diff = now - started
+
+    running = "Uptime: " + str(datetime.timedelta(seconds=diff.total_seconds()))
+
+    send_message(CHAN, running)
 
 
 def command_route():
@@ -145,7 +178,8 @@ def command_route():
 # --------------------------------------------- End Command Functions ----------------------------------------------
 
 if __name__ == '__main__':
-    sys.stderr = open('logs/errors.log', 'w')
+    sys.stderr = open('logs/errors.log', 'a')
+    sys.stdout = open('logs/errors.log', 'a')
 
     con = socket.socket()
     con.connect((HOST, PORT))
@@ -209,10 +243,8 @@ if __name__ == '__main__':
                         message = get_message(line)
                         parse_message(message)
 
-                        print(sender + ": " + message)
-
         except socket.timeout:
-            print("Socket timeout")
+            log.exception("Socket timeout")
 
         except socket.error:
-            print("Socket died")
+            log.exception("Socket died")

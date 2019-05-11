@@ -1,2 +1,3 @@
 .idea/
 logs/twitch-irc-bot.log
+logs/errors.log
