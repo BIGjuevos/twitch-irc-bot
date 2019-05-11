@@ -19,9 +19,13 @@
 
 import os
 import http.client
+import http.server
 import logging
 import re
+import signal
 import socket
+import sys
+import threading
 
 log = logging.getLogger()
 log.setLevel(logging.DEBUG)
@@ -47,37 +51,37 @@ PASS = os.getenv('T_PASS')
 # --------------------------------------------- Start Functions ----------------------------------------------------
 def send_pong(msg):
     b = bytes('PONG %s\r\n' % msg, 'UTF-8')
-    log.info(f"> {b}")
+    log.info(f"I > {b}")
     con.send(b)
 
 
 def send_message(chan, msg):
     b = bytes('PRIVMSG #%s :[BOT] %s\r\n' % (chan, msg), 'UTF-8')
-    log.info(f"> {b}")
+    log.info(f"I > {b}")
     con.send(b)
 
 
 def send_nick(nick):
     b = bytes('NICK %s\r\n' % nick, 'UTF-8')
-    log.info(f"> {b}")
+    log.info(f"I > {b}")
     con.send(b)
 
 
 def send_pass(password):
     b = bytes('PASS %s\r\n' % password, 'UTF-8')
-    log.info(f"> {b}")
+    log.info(f"I > {b}")
     con.send(b)
 
 
 def join_channel(chan):
     b = bytes('JOIN #%s\r\n' % chan, 'UTF-8')
-    log.info(f"> {b}")
+    log.info(f"I > {b}")
     con.send(b)
 
 
 def part_channel(chan):
     b = bytes('PART #%s\r\n' % chan, 'UTF-8')
-    log.info(f"> {b}")
+    log.info(f"I > {b}")
     con.send(b)
 
 
@@ -150,6 +154,38 @@ if __name__ == '__main__':
 
     data = ""
 
+    log.info("Setting up the health check")
+
+    class MyHandler(http.server.BaseHTTPRequestHandler):
+        def _set_headers(self):
+            self.send_response(200)
+            self.send_header('Content-type', 'text/plain')
+            self.end_headers()
+
+        def do_GET(self):
+            log.info(f"H < GET {self.path}")
+            self._set_headers()
+
+    server_address = ('', 8000)
+    httpd = http.server.HTTPServer(server_address, MyHandler)
+    status_thread = threading.Thread(target=httpd.serve_forever)
+    status_thread.start()
+
+    def sigterm_handler(s, frame):
+        # save the state here or do whatever you want
+        log.info("Asked to exit, doing so")
+        httpd.shutdown()
+        log.info("server shut down")
+        httpd.server_close()
+        log.info("socket closed")
+        status_thread.join()
+        log.info("thread joined, exiting...")
+        sys.exit(0)
+
+    signal.signal(signal.SIGINT, sigterm_handler)
+
+    log.info("Entering main bot loop")
+
     while True:
         try:
             data = data + con.recv(1024).decode('UTF-8')
@@ -159,7 +195,7 @@ if __name__ == '__main__':
 
             for line in data_split:
                 line = str.rstrip(line)
-                log.info(f"< {line}")
+                log.info(f"I < {line}")
                 line = str.split(line)
 
                 if len(line) >= 1:
