@@ -17,41 +17,80 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>
 
+import argparse
+import http.client
+import logging
 import re
 import socket
 
+log = logging.getLogger()
+log.setLevel(logging.DEBUG)
+
+# create formatter and add it to the handlers
+formatter = logging.Formatter('[%(asctime)s] [%(name)s] [%(levelname)s] %(message)s')
+
+# create file handler which logs even debug messages
+fh = logging.FileHandler('logs/twitch-irc-bot.log')
+fh.setLevel(logging.DEBUG)
+fh.setFormatter(formatter)
+log.addHandler(fh)
+
 # --------------------------------------------- Start Settings ----------------------------------------------------
-HOST = "irc.chat.twitch.tv"                     # Hostname of the IRC-Server in this case twitch's
-PORT = 6667                                     # Default IRC-Port
-CHAN = "#testing"                               # Channelname = #{Nickname}
-NICK = "Testing"                                # Nickname = Twitch username
-PASS = "oauth:asdfg12345asdfg12345asdfg12345"   # www.twitchapps.com/tmi/ will help to retrieve the required authkey
+parser = argparse.ArgumentParser()
+parser.add_argument("chan")
+parser.add_argument("nick")
+parser.add_argument("password")
+parser.add_argument("--host", default="irc.chat.twitch.tv")
+parser.add_argument("--port", default=6667)
+args = parser.parse_args()
+
+HOST = args.host  # Hostname of the IRC-Server, in this case twitch's
+PORT = args.port  # Ports
+CHAN = args.chan  # Channelname = #{Nickname}
+NICK = args.nick  # Nickname = Twitch username
+PASS = args.password  # www.twitchapps.com/tmi/ will help to retrieve the required authkey
+
+
 # --------------------------------------------- End Settings -------------------------------------------------------
 
 
 # --------------------------------------------- Start Functions ----------------------------------------------------
 def send_pong(msg):
-    con.send(bytes('PONG %s\r\n' % msg, 'UTF-8'))
+    b = bytes('PONG %s\r\n' % msg, 'UTF-8')
+    log.info(f"> {b}")
+    con.send(b)
 
 
 def send_message(chan, msg):
-    con.send(bytes('PRIVMSG %s :%s\r\n' % (chan, msg), 'UTF-8'))
+    b = bytes('PRIVMSG #%s :[BOT] %s\r\n' % (chan, msg), 'UTF-8')
+    log.info(f"> {b}")
+    con.send(b)
 
 
 def send_nick(nick):
-    con.send(bytes('NICK %s\r\n' % nick, 'UTF-8'))
+    b = bytes('NICK %s\r\n' % nick, 'UTF-8')
+    log.info(f"> {b}")
+    con.send(b)
 
 
 def send_pass(password):
-    con.send(bytes('PASS %s\r\n' % password, 'UTF-8'))
+    b = bytes('PASS %s\r\n' % password, 'UTF-8')
+    log.info(f"> {b}")
+    con.send(b)
 
 
 def join_channel(chan):
-    con.send(bytes('JOIN %s\r\n' % chan, 'UTF-8'))
+    b = bytes('JOIN #%s\r\n' % chan, 'UTF-8')
+    log.info(f"> {b}")
+    con.send(b)
 
 
 def part_channel(chan):
-    con.send(bytes('PART %s\r\n' % chan, 'UTF-8'))
+    b = bytes('PART #%s\r\n' % chan, 'UTF-8')
+    log.info(f"> {b}")
+    con.send(b)
+
+
 # --------------------------------------------- End Functions ------------------------------------------------------
 
 
@@ -80,54 +119,72 @@ def get_message(msg):
 def parse_message(msg):
     if len(msg) >= 1:
         msg = msg.split(' ')
-        options = {'!test': command_test,
-                   '!asdf': command_asdf}
+        options = {'!ping': command_ping,
+                   '!route': command_route}
         if msg[0] in options:
             options[msg[0]]()
+
+
 # --------------------------------------------- End Helper Functions -----------------------------------------------
 
 
 # --------------------------------------------- Start Command Functions --------------------------------------------
-def command_test():
-    send_message(CHAN, 'testing some stuff')
+def command_ping():
+    send_message(CHAN, 'pong')
 
 
-def command_asdf():
-    send_message(CHAN, 'asdfster')
+def command_route():
+    conn = http.client.HTTPConnection("maria.ryannull.com")
+
+    headers = {
+        'cache-control': "no-cache",
+    }
+
+    conn.request("GET", "/twitch/data.php?thing=rte", headers=headers)
+
+    res = conn.getresponse()
+    data = res.read()
+
+    send_message(CHAN, "Current Route: " + data.decode("utf-8"))
+
+
 # --------------------------------------------- End Command Functions ----------------------------------------------
 
-con = socket.socket()
-con.connect((HOST, PORT))
+if __name__ == '__main__':
+    con = socket.socket()
+    con.connect((HOST, PORT))
 
-send_pass(PASS)
-send_nick(NICK)
-join_channel(CHAN)
+    send_pass(PASS)
+    send_nick(NICK)
+    join_channel(CHAN)
 
-data = ""
+    data = ""
 
-while True:
-    try:
-        data = data+con.recv(1024).decode('UTF-8')
-        data_split = re.split(r"[~\r\n]+", data)
-        data = data_split.pop()
+    while True:
+        try:
+            data = data + con.recv(1024).decode('UTF-8')
 
-        for line in data_split:
-            line = str.rstrip(line)
-            line = str.split(line)
+            data_split = re.split(r"[~\r\n]+", data)
+            data = data_split.pop()
 
-            if len(line) >= 1:
-                if line[0] == 'PING':
-                    send_pong(line[1])
+            for line in data_split:
+                line = str.rstrip(line)
+                log.info(f"< {line}")
+                line = str.split(line)
 
-                if line[1] == 'PRIVMSG':
-                    sender = get_sender(line[0])
-                    message = get_message(line)
-                    parse_message(message)
+                if len(line) >= 1:
+                    if line[0] == 'PING':
+                        send_pong(line[1])
 
-                    print(sender + ": " + message)
+                    if line[1] == 'PRIVMSG':
+                        sender = get_sender(line[0])
+                        message = get_message(line)
+                        parse_message(message)
 
-    except socket.error:
-        print("Socket died")
+                        print(sender + ": " + message)
 
-    except socket.timeout:
-        print("Socket timeout")
+        except socket.timeout:
+            print("Socket timeout")
+
+        except socket.error:
+            print("Socket died")
