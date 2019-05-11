@@ -145,6 +145,8 @@ def command_route():
 # --------------------------------------------- End Command Functions ----------------------------------------------
 
 if __name__ == '__main__':
+    sys.stderr = open('logs/errors.log', 'w')
+
     con = socket.socket()
     con.connect((HOST, PORT))
 
