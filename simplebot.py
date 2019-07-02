@@ -114,15 +114,16 @@ def get_message(msg):
     return result
 
 
-def parse_message(msg):
+def parse_message(msg, sent_by):
     if len(msg) >= 1:
         msg = msg.split(' ')
         options = {'!ping': command_ping,
                    "!uptime": command_uptime,
-                   '!route': command_route}
+                   '!route': command_route,
+                   '!predict': command_predict}
         if msg[0] in options:
             try:
-                options[msg[0]]()
+                options[msg[0]](msg[1], sent_by)
             except Exception:
                 log.exception("Something went wrong calling {msg[0]}")
 
@@ -131,11 +132,11 @@ def parse_message(msg):
 
 
 # --------------------------------------------- Start Command Functions --------------------------------------------
-def command_ping():
+def command_ping(msg, sent_by):
     send_message(CHAN, 'pong')
 
 
-def command_uptime():
+def command_uptime(msg, sent_by):
     conn = http.client.HTTPSConnection("api.twitch.tv")
 
     url = "/kraken/streams/" + NICK + "?client_id=" \
@@ -160,19 +161,44 @@ def command_uptime():
     send_message(CHAN, running)
 
 
-def command_route():
-    conn = http.client.HTTPConnection("maria.ryannull.com")
+def command_route(msg, sent_by):
+    conn = http.client.HTTPConnection("twitch-briefer.service.consul", 5556)
 
     headers = {
         'cache-control': "no-cache",
     }
 
-    conn.request("GET", "/twitch/data.php?thing=rte", headers=headers)
+    conn.request("GET", "/data?thing=rte", headers=headers)
 
     res = conn.getresponse()
     data = res.read()
 
-    send_message(CHAN, "Current Route: " + data.decode("utf-8"))
+    data = data.strip(b'\" \n\r')
+    data = data.replace(b'\\n', b' ')
+
+    url = "https://skyvector.com/?chart=304&fpl=%20" + data.decode("utf-8").replace(" ", "%20")
+
+    send_message(CHAN, "Current Route: " + data.decode("utf-8") + f" URL: {url}")
+
+
+def command_predict(msg, sent_by):
+    try:
+        speed = int(msg)
+    except ValueError:
+        send_message(CHAN, f"{sent_by}: You must provide a number.")
+        return
+
+    if speed >= 0:
+        send_message(CHAN, f"{sent_by}: {msg} is not a valid vertical speed. Whole numbers below zero only please.")
+        return
+
+    conn = http.client.HTTPConnection("twitch-briefer.service.consul", port=5556)
+
+    conn.request("GET", f"/guess?username={sent_by}&speed={msg}")
+
+    send_message(CHAN, f"{sent_by}: You have guessed {msg} fpm. Good Luck!")
+
+    pass
 
 
 # --------------------------------------------- End Command Functions ----------------------------------------------
@@ -200,9 +226,15 @@ if __name__ == '__main__':
 
         def do_GET(self):
             log.info(f"H < GET {self.path}")
+            if self.path.startswith("/winner"):
+                name = self.path.split("/")[2]
+                speed = self.path.split("/")[3]
+                actual = self.path.split("/")[4]
+                send_message(CHAN, f"We've landed at {actual} fpm! Congratulations to {name} with the closest correct guess of {speed} -fpm.")
+
             self._set_headers()
 
-    server_address = ('', 8000)
+    server_address = ('', 9999)
     httpd = http.server.HTTPServer(server_address, MyHandler)
     status_thread = threading.Thread(target=httpd.serve_forever)
     status_thread.start()
@@ -241,7 +273,7 @@ if __name__ == '__main__':
                     if line[1] == 'PRIVMSG':
                         sender = get_sender(line[0])
                         message = get_message(line)
-                        parse_message(message)
+                        parse_message(message, sender)
 
         except socket.timeout:
             log.exception("Socket timeout")

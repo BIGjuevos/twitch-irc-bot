@@ -5,6 +5,6 @@ COPY logs/ logs/
 
 RUN pip install python-dateutil
 
-EXPOSE 8000
+EXPOSE 9999
 
 CMD [ "python", "./simplebot.py" ]
