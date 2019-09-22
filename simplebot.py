@@ -17,6 +17,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>
 import datetime
+import time
 
 import dateutil.parser
 import json
@@ -253,6 +254,8 @@ if __name__ == '__main__':
     signal.signal(signal.SIGINT, sigterm_handler)
 
     log.info("Entering main bot loop")
+    start = time.time()
+    restart_time = start + 3600
 
     while True:
         try:
@@ -280,3 +283,7 @@ if __name__ == '__main__':
 
         except socket.error:
             log.exception("Socket died")
+
+        if time.time() >= restart_time:
+            log.info("Our life is up, die so someone can spawn a new one of us.")
+            sigterm_handler(None, None)
