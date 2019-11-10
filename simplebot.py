@@ -121,6 +121,8 @@ def parse_message(msg, sent_by):
         options = {'!ping': command_ping,
                    "!uptime": command_uptime,
                    '!route': command_route,
+                   '!help': command_help,
+                   '!discord': command_discord,
                    '!predict': command_predict}
         if msg[0] in options:
             try:
@@ -137,23 +139,33 @@ def command_ping(msg, sent_by):
     send_message(CHAN, 'pong')
 
 
+def command_help(msg, sent_by):
+    send_message(CHAN, 'Available Commands: !route, !predict, !ping, !discord, !help, !uptime')
+
+
+def command_discord(msg, sent_by):
+    send_message(CHAN, 'Discord is at: https://discord.gg/RdGnarY')
+
+
 def command_uptime(msg, sent_by):
     conn = http.client.HTTPSConnection("api.twitch.tv")
 
-    url = "/kraken/streams/" + NICK + "?client_id=" \
-          + API_KEY
-    conn.request("GET", url)
+    url = "/helix/streams/?user_login=" + NICK
+    conn.request("GET", url, headers={
+        'Client-ID': API_KEY
+    })
 
     res = conn.getresponse()
     data = res.read()
 
     info = json.loads(data)
 
-    if info['stream'] is None:
+    if len(info['data']) is 0:
         send_message(CHAN, 'Not currently streaming. Thanks for asking though.')
         return
 
-    started = dateutil.parser.parse(info['stream']['created_at'])
+    info = info['data'][0]
+    started = dateutil.parser.parse(info['started_at'])
     now = datetime.datetime.now(datetime.timezone.utc)
     diff = now - started
 
