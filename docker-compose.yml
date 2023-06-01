@@ -1,0 +1,13 @@
+version: '3'
+services:
+  bot:
+    build: .
+    container_name: twitch-irc-bot
+    restart: always
+    ports:
+      - "9999:9999"
+    environment:
+      - T_CHAN=${T_CHAN}
+      - T_NICK=${T_NICK}
+      - T_PASS=${T_PASS}
+      - T_API_KEY=${T_API_KEY}

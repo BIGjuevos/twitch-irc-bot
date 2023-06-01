@@ -44,7 +44,7 @@ fh.setFormatter(formatter)
 log.addHandler(fh)
 
 # --------------------------------------------- Start Settings ----------------------------------------------------
-HOST = os.getenv('T_HOST',"irc.chat.twitch.tv")
+HOST = os.getenv('T_HOST', "irc.chat.twitch.tv")
 PORT = os.getenv('T_POST', 6667)
 CHAN = os.getenv('T_CHAN')
 NICK = os.getenv('T_NICK')
@@ -119,10 +119,10 @@ def parse_message(msg, sent_by):
     if len(msg) >= 1:
         msg = msg.split(' ')
         options = {'!ping': command_ping,
-                   "!uptime": command_uptime,
                    '!route': command_route,
                    '!help': command_help,
                    '!discord': command_discord,
+                   '!social': command_social,
                    '!predict': command_predict}
         if msg[0] in options:
             try:
@@ -140,58 +140,38 @@ def command_ping(msg, sent_by):
 
 
 def command_help(msg, sent_by):
-    send_message(CHAN, 'Available Commands: !route, !predict, !ping, !discord, !help, !uptime')
+    send_message(CHAN, 'Available Commands: !route, !ping, !discord, !social, !help')
 
 
 def command_discord(msg, sent_by):
     send_message(CHAN, 'Discord is at: https://discord.gg/RdGnarY')
 
 
-def command_uptime(msg, sent_by):
-    conn = http.client.HTTPSConnection("api.twitch.tv")
-
-    url = "/helix/streams/?user_login=" + NICK
-    conn.request("GET", url, headers={
-        'Client-ID': API_KEY
-    })
-
-    res = conn.getresponse()
-    data = res.read()
-
-    info = json.loads(data)
-
-    if len(info['data']) is 0:
-        send_message(CHAN, 'Not currently streaming. Thanks for asking though.')
-        return
-
-    info = info['data'][0]
-    started = dateutil.parser.parse(info['started_at'])
-    now = datetime.datetime.now(datetime.timezone.utc)
-    diff = now - started
-
-    running = "Uptime: " + str(datetime.timedelta(seconds=diff.total_seconds()))
-
-    send_message(CHAN, running)
+def command_social(msg, sent_by):
+    send_message(CHAN, 'Twitter: https://twitter.com/OneTrueCapt ' +
+                       'YouTube: https://www.youtube.com/channel/UCTZcQk-msWEliK4MBUHyuqg ' +
+                       'Discord: https://discord.gg/RdGnarY')
 
 
 def command_route(msg, sent_by):
-    conn = http.client.HTTPConnection("twitch-briefer.service.consul", 5556)
+    conn = http.client.HTTPConnection("tools.ryannull.com", 8888)
 
     headers = {
         'cache-control': "no-cache",
     }
 
-    conn.request("GET", "/data?thing=rte", headers=headers)
+    conn.request("GET", "/data", headers=headers)
 
     res = conn.getresponse()
     data = res.read()
 
     data = data.strip(b'\" \n\r')
-    data = data.replace(b'\\n', b' ')
+    data = data.replace(b'\\n', b' ').decode("utf-8")
+    data = json.loads(data)
 
-    url = "https://skyvector.com/?chart=304&fpl=%20" + data.decode("utf-8").replace(" ", "%20")
+    url = "https://skyvector.com/?chart=304&fpl=%20" + data['rte'].replace(" ", "%20")
 
-    send_message(CHAN, "Current Route: " + data.decode("utf-8") + f" URL: {url}")
+    send_message(CHAN, "Current Route: " + data['rte'] + f" URL: {url}")
 
 
 def command_predict(msg, sent_by):
@@ -205,7 +185,7 @@ def command_predict(msg, sent_by):
         send_message(CHAN, f"{sent_by}: {msg} is not a valid vertical speed. Whole numbers below zero only please.")
         return
 
-    conn = http.client.HTTPConnection("twitch-briefer.service.consul", port=5556)
+    conn = http.client.HTTPConnection("tools.ryannull.com", port=8888)
 
     conn.request("GET", f"/guess?username={sent_by}&speed={msg}")
 
